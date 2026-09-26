@@ -7,6 +7,7 @@ interface ReadingProgressIndicatorProps {
   readStatementIds: Set<string>;
   activeStatementId: string | null;
   scrollPercent: number;
+  isScrolledDown?: boolean;
   onSelectStatement: (id: string) => void;
   onResetProgress?: () => void;
   onMarkAllRead?: () => void;
@@ -19,6 +20,7 @@ export const ReadingProgressIndicator: React.FC<ReadingProgressIndicatorProps> =
   readStatementIds,
   activeStatementId,
   scrollPercent,
+  isScrolledDown = false,
   onSelectStatement,
   onResetProgress,
   onMarkAllRead,
@@ -28,11 +30,13 @@ export const ReadingProgressIndicator: React.FC<ReadingProgressIndicatorProps> =
   const totalStatements = statements.length;
   const readCount = readStatementIds.size;
 
-  // Calculate percentage: combine read statements ratio and scroll percentage
+  // Calculate percentage
   const statementPercent = totalStatements > 0 ? Math.round((readCount / totalStatements) * 100) : 0;
-  // Use the maximum of statement progress and scroll progress for natural feeling
-  const effectivePercent = Math.max(statementPercent, scrollPercent);
-  const isComplete = effectivePercent >= 100 || (totalStatements > 0 && readCount === totalStatements);
+  const effectivePercent = isScrolledDown
+    ? Math.max(statementPercent, scrollPercent)
+    : Math.min(statementPercent, totalStatements > 0 ? Math.round((1 / totalStatements) * 100) : 0);
+  
+  const isComplete = effectivePercent >= 100 || (totalStatements > 0 && readCount === totalStatements && scrollPercent >= 85);
 
   // Calculate estimated reading time and remaining time
   const { totalMinutes, remainingMinutes } = useMemo(() => {
@@ -60,18 +64,47 @@ export const ReadingProgressIndicator: React.FC<ReadingProgressIndicatorProps> =
 
   return (
     <>
-      {/* 1. Subtle Sticky Header Top Line (Always visible while scrolling post) */}
+      {/* 1. Subtle Sticky Header Top Line - HIDDEN when at top of page, smoothly fades in when scrolling down */}
       <div
-        className="sticky top-14 sm:top-16 z-25 w-full bg-stone-200/60 dark:bg-slate-800/60 h-[2.5px] overflow-hidden -mt-px pointer-events-none"
-        aria-hidden="true"
+        className={`sticky top-14 sm:top-16 z-25 w-full transition-all duration-300 pointer-events-none ${
+          isScrolledDown
+            ? 'opacity-100 translate-y-0'
+            : 'opacity-0 -translate-y-2 pointer-events-none'
+        }`}
+        aria-hidden={!isScrolledDown}
       >
-        <div
-          className="h-full bg-gradient-to-r from-amber-500 via-amber-400 to-emerald-500 transition-[width] duration-150 ease-out shadow-[0_0_8px_rgba(245,158,11,0.5)]"
-          style={{ width: `${effectivePercent}%` }}
-        />
+        <div className="w-full bg-stone-200/80 dark:bg-slate-800/80 h-[3px] overflow-hidden shadow-xs">
+          <div
+            className="h-full bg-gradient-to-r from-amber-500 via-amber-400 to-emerald-500 transition-[width] duration-150 ease-out shadow-[0_0_8px_rgba(245,158,11,0.5)]"
+            style={{ width: `${Math.max(statementPercent, scrollPercent)}%` }}
+          />
+        </div>
+
+        {/* Compact reading pill while scrolling down */}
+        {isScrolledDown && (
+          <div className="max-w-[1440px] mx-auto px-3 sm:px-6 flex justify-end">
+            <div className="pointer-events-auto mt-1.5 inline-flex items-center gap-2 px-2.5 py-1 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-stone-200/90 dark:border-slate-800 rounded-full shadow-sm text-[11px] text-stone-700 dark:text-stone-300">
+              <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
+                {Math.max(statementPercent, scrollPercent)}%
+              </span>
+              <span className="text-stone-300 dark:text-stone-700">·</span>
+              <span>
+                {readCount}/{totalStatements} claims read
+              </span>
+              {activeStatementId && (
+                <>
+                  <span className="text-stone-300 dark:text-stone-700 hidden xs:inline">·</span>
+                  <span className="text-stone-500 dark:text-stone-400 hidden xs:inline truncate max-w-[150px]">
+                    Claim #{statements.findIndex((s) => s.id === activeStatementId) + 1}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* 2. Subtle In-View Progress Card (At the top of post detail content) */}
+      {/* 2. In-View Progress Card (At top of post detail content) */}
       <section
         aria-label="Reading & Processing Progress"
         className="mb-4 sm:mb-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xs border border-stone-200/90 dark:border-slate-800 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-2xs transition-colors"
@@ -107,7 +140,7 @@ export const ReadingProgressIndicator: React.FC<ReadingProgressIndicatorProps> =
                   : 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
               }`}
             >
-              {effectivePercent}%
+              {isComplete ? '100%' : `${statementPercent}%`}
             </span>
           </div>
 
@@ -167,7 +200,7 @@ export const ReadingProgressIndicator: React.FC<ReadingProgressIndicatorProps> =
         <div
           className="relative w-full bg-stone-100 dark:bg-slate-800 rounded-full h-2 p-0.5 flex items-center gap-1 overflow-hidden"
           role="progressbar"
-          aria-valuenow={effectivePercent}
+          aria-valuenow={statementPercent}
           aria-valuemin={0}
           aria-valuemax={100}
         >

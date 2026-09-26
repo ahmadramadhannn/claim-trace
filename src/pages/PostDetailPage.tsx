@@ -38,16 +38,19 @@ export const PostDetailPage: React.FC = () => {
   const [readStatementIds, setReadStatementIds] = useState<Set<string>>(new Set());
   const [activeReadingStatementId, setActiveReadingStatementId] = useState<string | null>(null);
   const [scrollPercent, setScrollPercent] = useState(0);
+  const [isScrolledDown, setIsScrolledDown] = useState(false);
 
   // Reset/initialize reading progress when post changes
   useEffect(() => {
     if (currentPost && currentPost.statements.length > 0) {
       setReadStatementIds(new Set([currentPost.statements[0].id]));
       setScrollPercent(0);
+      setIsScrolledDown(false);
       setActiveReadingStatementId(currentPost.statements[0].id);
     } else {
       setReadStatementIds(new Set());
       setScrollPercent(0);
+      setIsScrolledDown(false);
       setActiveReadingStatementId(null);
     }
   }, [currentPost?.id]);
@@ -61,6 +64,10 @@ export const PostDetailPage: React.FC = () => {
     const handleScroll = () => {
       if (!ticking) {
         window.requestAnimationFrame(() => {
+          const scrollY = window.scrollY || document.documentElement.scrollTop;
+          const scrolledPastTop = scrollY > 80;
+          setIsScrolledDown(scrolledPastTop);
+
           const boardEl = document.getElementById('board-canvas-card');
           if (boardEl) {
             const rect = boardEl.getBoundingClientRect();
@@ -68,11 +75,11 @@ export const PostDetailPage: React.FC = () => {
             const headerOffset = 70; // sticky header height
             const totalHeight = rect.height;
             const scrolled = headerOffset - rect.top;
-            const maxScroll = totalHeight - (windowHeight - headerOffset);
+            const maxScroll = Math.max(1, totalHeight - (windowHeight - headerOffset));
 
             let pct = 0;
-            if (maxScroll <= 0) {
-              pct = 100;
+            if (scrollY <= 10) {
+              pct = 0;
             } else {
               pct = Math.min(100, Math.max(0, (scrolled / maxScroll) * 100));
             }
@@ -86,26 +93,31 @@ export const PostDetailPage: React.FC = () => {
             setReadStatementIds((prev) => {
               const updated = new Set(prev);
 
+              // Always ensure statement 1 or active statement is present
+              if (currentPost.statements.length > 0) {
+                updated.add(currentPost.statements[0].id);
+              }
+
               statementEls.forEach((el) => {
                 const sId = el.getAttribute('data-statement-id');
                 if (!sId) return;
 
                 const sRect = el.getBoundingClientRect();
 
-                // If statement top is above 75% of viewport, it has been read/processed
-                if (sRect.top < windowHeight * 0.75) {
+                // Only mark as read when user has scrolled past it or brought it into the upper reading zone
+                if (scrolledPastTop && sRect.top < windowHeight * 0.45) {
                   updated.add(sId);
                 }
 
                 // Identify currently active statement around reading eye-line (35%-50% viewport)
-                const distanceToFocalLine = Math.abs(sRect.top - windowHeight * 0.4);
+                const distanceToFocalLine = Math.abs(sRect.top - windowHeight * 0.38);
                 if (distanceToFocalLine < closestDistance) {
                   closestDistance = distanceToFocalLine;
                   activeId = sId;
                 }
               });
 
-              // If scrolled close to bottom, mark all statements as read
+              // If scrolled close to bottom of article, mark all statements as read
               if (pct >= 92) {
                 currentPost.statements.forEach((s) => updated.add(s.id));
               }
@@ -251,6 +263,7 @@ export const PostDetailPage: React.FC = () => {
           readStatementIds={readStatementIds}
           activeStatementId={selectedStatementId || activeReadingStatementId}
           scrollPercent={scrollPercent}
+          isScrolledDown={isScrolledDown}
           onSelectStatement={handleSelectFromProgress}
           onResetProgress={handleResetProgress}
           onMarkAllRead={handleMarkAllRead}
