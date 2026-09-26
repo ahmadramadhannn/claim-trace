@@ -1,0 +1,6 @@
+{
+  "name": "ClaimTrace",
+  "description": "Deconstruct social posts into attributed statements: distinguish personal experience, data, observation, opinion, and external reference links with interactive citation linking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
